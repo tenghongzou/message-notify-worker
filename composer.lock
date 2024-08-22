@@ -4,8 +4,54 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "5b512a54df0c5ea3ef4d4dc79def43d2",
+    "content-hash": "31e8446030d90b0a9b7aea320fd25ca2",
     "packages": [
+        {
+            "name": "leocarmo/graceful-shutdown-php",
+            "version": "1.0.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/leocarmo/graceful-shutdown-php.git",
+                "reference": "4bb8cd1db8b944a1f1b85f83fc14dc6189a1d580"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/leocarmo/graceful-shutdown-php/zipball/4bb8cd1db8b944a1f1b85f83fc14dc6189a1d580",
+                "reference": "4bb8cd1db8b944a1f1b85f83fc14dc6189a1d580",
+                "shasum": ""
+            },
+            "require": {
+                "ext-pcntl": "*",
+                "php": "^7.4 || ^8.0"
+            },
+            "require-dev": {
+                "phpunit/php-code-coverage": "^9.2",
+                "phpunit/phpunit": "^9",
+                "symfony/var-dumper": "^5.2"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "LeoCarmo\\GracefulShutdown\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Leonardo Carmo",
+                    "email": "leonardo.docarmo@hotmail.com"
+                }
+            ],
+            "description": "Graceful Shutdown for PHP",
+            "support": {
+                "issues": "https://github.com/leocarmo/graceful-shutdown-php/issues",
+                "source": "https://github.com/leocarmo/graceful-shutdown-php/tree/1.0.0"
+            },
+            "time": "2021-05-01T14:34:24+00:00"
+        },
         {
             "name": "monolog/monolog",
             "version": "3.7.0",
