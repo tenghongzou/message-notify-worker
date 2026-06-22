@@ -25,11 +25,16 @@ php bin/console cache:clear
 
 # Install dependencies
 composer install
+
+# Run the test suite (PHPUnit 11)
+php bin/phpunit
 ```
 
-There is currently **no test suite** (the `tests/` dir does not exist yet, though
-`composer.json` maps the `App\Tests\` PSR-4 namespace to it). If you add tests,
-PHPUnit is not yet installed — add `symfony/test-pack` or `phpunit/phpunit` first.
+Tests live in `tests/` (PSR-4 `App\Tests\`) and run on PHPUnit 11. `NotifyWorkerServiceTest`
+covers the per-job dispatch logic (payload parsing, platform/token resolution, validation);
+each notifier has a test asserting the exact HTTP request it builds via Symfony's
+`MockHttpClient`/`MockResponse`. `phpunit.dist.xml` sets `failOnDeprecation/Notice/Warning`,
+so keep test and source output clean (use PHPUnit attributes, not doc-comment metadata).
 
 ## Required environment
 
