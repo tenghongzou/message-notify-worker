@@ -5,8 +5,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 A headless Symfony 7.1 console application (no HTTP layer) that runs a long-lived
-worker consuming jobs from a **beanstalkd** queue and dispatching them as notifications
-(currently LINE). It is a CLI-only Symfony app — there are no controllers or routes in use.
+worker consuming jobs from a **beanstalkd** queue and dispatching them as notifications.
+Supported platforms: **LINE Messaging API**, **Telegram**, and **ntfy** (selected per
+job via the payload's `platform` field, default `line`). It is a CLI-only Symfony app —
+there are no controllers or routes in use.
+
+> Note: the original `LINE Notify` integration was removed — LINE Notify was officially
+> terminated on 2025-03-31. `LineMessagingNotification` (the LINE Messaging API push
+> endpoint) is its successor.
 
 ## Commands
 
@@ -31,9 +37,24 @@ Set in `.env.local` (gitignored, not committed):
 
 - `BEANSTALKD_HOST` — beanstalkd server address (e.g. `localhost`). Wired into
   `PheanstalkService` via the `beanstalkd_host` parameter in `config/services.yaml`.
-- `LINE_NOTIFY_ACCESS_TOKEN` — LINE Notify bearer token, read in `NotifyWorkerService`.
+
+Per-platform credentials, injected into `NotifyWorkerService` via `#[Autowire('%env(...)%')]`
+(empty defaults live in `.env`, so only the platforms you use need real values):
+- `LINE_MESSAGING_CHANNEL_ACCESS_TOKEN` — LINE Messaging API channel access token.
+- `TELEGRAM_BOT_TOKEN` — Telegram bot token (from @BotFather).
+- `NTFY_SERVER_URL` — ntfy base URL (default `https://ntfy.sh`), injected into `NtfyNotification`.
+- `NTFY_AUTH_TOKEN` — optional ntfy access token (empty for public topics).
 
 A running beanstalkd instance is required for the worker to do anything.
+
+## Job payload
+
+Jobs are JSON. `NotifyWorkerService::exec()` reads:
+- `platform` — `line` | `telegram` | `ntfy` (optional, defaults to `line`).
+- `message` — text to send (required, must be non-empty).
+- `target` — recipient: LINE user/group/room id, Telegram chat id, or ntfy topic.
+- `image_url` — optional HTTPS image URL.
+- `retry_count` / `fail_message` — managed by the command's retry protocol (see below).
 
 ## Architecture
 
@@ -59,25 +80,32 @@ payload, not in beanstalkd metadata.
 All queue operations (reserve, delete, put, touch, stats) go through here.
 
 **`NotifyWorkerService`** (`src/Service/`) — the per-job business logic invoked by the
-command. Calls `NotificationFactory` to obtain a notifier and sends. **Note: `exec()` is
-currently a stub** — it creates the LINE notifier and sets the token but does not yet
-parse the job payload or call `send()`. This is the main place to implement actual
-dispatch logic.
+command. `exec()` decodes the JSON payload, picks the `platform`, asks `NotificationFactory`
+for the matching notifier, then fluently `setToken()->setTarget()->send()`. The token is
+resolved per platform from the env-injected credentials (`resolveToken()`); the `target`
+comes from the payload.
 
 **Notification subsystem** (`src/Service/Notification/`):
-- `NotificationServiceInterface` — `setToken()` + `send(message, imageUrl?)`.
+- `NotificationServiceInterface` — `setToken()` + `setTarget()` + `send(message, imageUrl?)`,
+  all fluent (`setToken`/`setTarget` return `static`).
 - `NotificationFactory` — `create(string $platform)` returns a notifier by name via a
-  `match`; only `'line'` is supported, anything else throws.
-- `LineNotification` — posts to the LINE Notify API using Symfony HttpClient.
+  `match` (`line` / `telegram` / `ntfy`); anything else throws.
+- `LineMessagingNotification` — LINE Messaging API push (`POST /v2/bot/message/push`),
+  bearer channel access token, image sent as a second message object.
+- `TelegramNotification` — Telegram Bot API (`sendMessage`, or `sendPhoto` when an image
+  is present); token in the URL, `target` is the chat id.
+- `NtfyNotification` — publishes to `{NTFY_SERVER_URL}/{topic}`; optional bearer token,
+  image attached via the `Attach` header.
 
 To add a new notification platform: implement `NotificationServiceInterface`, inject it
-into `NotificationFactory`, and add a `match` arm.
+into `NotificationFactory`, add a `match` arm, and (if it needs a credential) inject a new
+env token into `NotifyWorkerService::resolveToken()`.
 
-## Service wiring gotcha
+## Service wiring
 
-`config/services.yaml` **excludes `src/Service/Notification/` from autoregistration**.
-Despite this, `NotificationFactory` and `LineNotification` are still autowired because
-they are pulled in as constructor dependencies of registered services — the exclude only
-prevents them from being registered as standalone service entries. If you add a class in
-that directory that must be a directly-fetchable service, you'll need an explicit
-definition or to adjust the exclude list.
+All classes under `src/` autoregister/autowire normally (`config/services.yaml`).
+`src/Service/Notification/` is **not** excluded — the concrete notifiers and the factory
+are registered services; the `NotificationServiceInterface` is skipped automatically (it
+is not instantiable). The notifiers are stateful (`setToken`/`setTarget` mutate the shared
+instance), which is safe here because the worker is single-threaded and processes one job
+at a time.
